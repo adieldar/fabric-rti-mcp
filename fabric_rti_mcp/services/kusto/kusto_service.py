@@ -1023,6 +1023,8 @@ def kusto_get_shots(
         | project similarity, EmbeddingText, AugmentedText
     """
 
+    # The SLM function loads model artifacts in the Python sandbox, and Kusto's
+    # hard read-only request properties block those external artifact callouts.
     return _execute(
         kql_query,
         cluster_uri,

@@ -75,6 +75,18 @@ def _env_bool(name: str) -> bool:
     return os.getenv(name, "false").lower() in ("true", "1")
 
 
+def _env_choice(name: str, default: str, supported_values: tuple[str, ...]) -> str:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+
+    normalized_value = raw_value.strip().lower()
+    if normalized_value not in supported_values:
+        expected_values = ", ".join(supported_values)
+        raise ValueError(f"Invalid {name}='{raw_value}'. Expected one of: {expected_values}.")
+    return normalized_value
+
+
 @dataclass(slots=True, frozen=True)
 class KustoConfig:
     # Default service. Will be used if no specific service is provided.
@@ -120,8 +132,16 @@ class KustoConfig:
 
         open_ai_embedding_endpoint = os.getenv(KustoEnvVarNames.open_ai_embedding_endpoint, None)
         shots_table = os.getenv(KustoEnvVarNames.shots_table, None)
-        shots_embedding_method = os.getenv(KustoEnvVarNames.shots_embedding_method, DEFAULT_SHOTS_EMBEDDING_METHOD)
-        shots_slm_model = os.getenv(KustoEnvVarNames.shots_slm_model, DEFAULT_SHOTS_SLM_MODEL)
+        shots_embedding_method = _env_choice(
+            KustoEnvVarNames.shots_embedding_method,
+            DEFAULT_SHOTS_EMBEDDING_METHOD,
+            SUPPORTED_SHOTS_EMBEDDING_METHODS,
+        )
+        shots_slm_model = _env_choice(
+            KustoEnvVarNames.shots_slm_model,
+            DEFAULT_SHOTS_SLM_MODEL,
+            SUPPORTED_SHOTS_SLM_MODELS,
+        )
         known_services_string = os.getenv(KustoEnvVarNames.known_services, None)
         known_services: list[KustoServiceConfig] | None = None
         eager_connect = _env_bool(KustoEnvVarNames.eager_connect)
