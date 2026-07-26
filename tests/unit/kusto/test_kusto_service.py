@@ -7,7 +7,11 @@ from azure.kusto.data.response import KustoResponseDataSet
 
 from fabric_rti_mcp import __version__
 from fabric_rti_mcp.auth.auth_context import CredentialSource
-from fabric_rti_mcp.services.kusto.kusto_config import KustoConfig
+from fabric_rti_mcp.services.kusto.kusto_config import (
+    DEFAULT_SHOTS_EMBEDDING_METHOD,
+    DEFAULT_SHOTS_SLM_MODEL,
+    KustoConfig,
+)
 from fabric_rti_mcp.services.kusto.kusto_service import (
     KustoConnectionManager,
     kusto_command,
@@ -200,7 +204,15 @@ def test_kusto_shots_embedding_defaults_load_from_env() -> None:
     config = KustoConfig.from_env()
 
     assert config.shots_embedding_method == "slm"
-    assert config.shots_slm_model == "harrier-v1-270m"
+    assert config.shots_slm_model == DEFAULT_SHOTS_SLM_MODEL
+
+
+@patch.dict("os.environ", {}, clear=True)
+def test_kusto_shots_embedding_defaults_are_centralized() -> None:
+    config = KustoConfig.from_env()
+
+    assert config.shots_embedding_method == DEFAULT_SHOTS_EMBEDDING_METHOD
+    assert config.shots_slm_model == DEFAULT_SHOTS_SLM_MODEL
 
 
 @patch.dict("os.environ", {"FABRIC_RTI_KUSTO_RESPONSE_FORMAT": "full_kusto_response"}, clear=True)

@@ -10,7 +10,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import asdict
 from datetime import timedelta
-from typing import Any, Literal, TypeVar
+from typing import Any, TypeVar
 from urllib.parse import quote, urlparse
 
 from azure.kusto.data import ClientRequestProperties, KustoConnectionStringBuilder
@@ -18,7 +18,15 @@ from azure.kusto.data import ClientRequestProperties, KustoConnectionStringBuild
 from fabric_rti_mcp import __version__  # type: ignore
 from fabric_rti_mcp.auth.auth_context import TokenTarget, credential_source_cache_key, resolve_credential_source
 from fabric_rti_mcp.config import global_config, logger
-from fabric_rti_mcp.services.kusto.kusto_config import KustoConfig, KustoServiceConfig, normalize_service_uri_key
+from fabric_rti_mcp.services.kusto.kusto_config import (
+    SUPPORTED_SHOTS_EMBEDDING_METHODS,
+    SUPPORTED_SHOTS_SLM_MODELS,
+    KustoConfig,
+    KustoServiceConfig,
+    ShotsEmbeddingMethod,
+    ShotsSlmModel,
+    normalize_service_uri_key,
+)
 from fabric_rti_mcp.services.kusto.kusto_connection import KustoConnection, sanitize_uri
 from fabric_rti_mcp.services.kusto.kusto_formatter import KustoFormatter, KustoResponseFormat
 
@@ -928,14 +936,20 @@ def kusto_get_shots(
     database: str | None = None,
     embedding_endpoint: str | None = None,
     client_request_properties: dict[str, Any] | None = None,
-    embedding_method: Literal["slm", "aoai"] | None = None,
-    slm_model_name: str | None = None,
+    embedding_method: ShotsEmbeddingMethod | None = None,
+    slm_model_name: ShotsSlmModel | None = None,
 ) -> dict[str, Any]:
     """
     Find similar saved KQL queries.
 
     Semantic search returns existing query examples that are relevant to the user's
     prompt, so they can be used as starting points for similar requests.
+
+    SLM requires a deployed slm_embeddings_fl function and the Python plugin image.
+    Follow the Azure Data Explorer or Microsoft Fabric deployment instructions at
+    https://learn.microsoft.com/en-us/kusto/functions-library/slm-embeddings-fl.
+    Before selecting SLM, kusto_describe_database_entity can verify that the function
+    exists by using entity_name="slm_embeddings_fl" and entity_type="function".
 
     :param prompt: The user prompt to find similar shots for.
     :param shots_table_name: Name of the table containing the shots. The table should have "EmbeddingText" (string)
@@ -952,8 +966,10 @@ def kusto_get_shots(
     :param embedding_method: Embedding method for the prompt. "slm" invokes a pre-deployed slm_embeddings_fl
                              function in the queried database. "aoai" uses ai_embeddings and requires an embedding
                              endpoint. If not provided, uses KUSTO_SHOTS_EMBEDDING_METHOD, which defaults to "aoai".
-    :param slm_model_name: SLM model passed to slm_embeddings_fl. The shots table vectors must use the same model.
-                           If not provided, uses KUSTO_SHOTS_SLM_MODEL, which defaults to "harrier-v1-270m".
+    :param slm_model_name: SLM model passed to slm_embeddings_fl: "jina-v2-small" (512 dimensions),
+                           "e5-small-v2" (384), or "harrier-v1-270m" (640). The shots table vectors must use the
+                           same model. If not provided, uses KUSTO_SHOTS_SLM_MODEL, which defaults to
+                           "harrier-v1-270m".
     :return: List of dictionaries containing the shots records.
     """
     resolved_table = shots_table_name or CONFIG.shots_table
@@ -964,15 +980,17 @@ def kusto_get_shots(
 
     resolved_embedding_method = embedding_method if embedding_method is not None else CONFIG.shots_embedding_method
     normalized_embedding_method = resolved_embedding_method.strip().lower()
-    if normalized_embedding_method not in ("slm", "aoai"):
-        raise ValueError("embedding_method must be either 'slm' or 'aoai'.")
+    if normalized_embedding_method not in SUPPORTED_SHOTS_EMBEDDING_METHODS:
+        supported_methods = ", ".join(SUPPORTED_SHOTS_EMBEDDING_METHODS)
+        raise ValueError(f"embedding_method must be one of: {supported_methods}.")
 
     escaped_prompt = kql_escape_string(prompt)
     if normalized_embedding_method == "slm":
         resolved_model_name = slm_model_name if slm_model_name is not None else CONFIG.shots_slm_model
         normalized_model_name = resolved_model_name.strip()
-        if not normalized_model_name:
-            raise ValueError("slm_model_name must not be empty.")
+        if normalized_model_name not in SUPPORTED_SHOTS_SLM_MODELS:
+            supported_models = ", ".join(SUPPORTED_SHOTS_SLM_MODELS)
+            raise ValueError(f"slm_model_name must be one of: {supported_models}.")
 
         embedding_query = f"""
         let embedded_term = toscalar(

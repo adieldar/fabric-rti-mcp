@@ -3,11 +3,20 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
+from typing import Literal, TypeAlias, get_args
 
 from azure.kusto.data import KustoConnectionStringBuilder
 
 from fabric_rti_mcp.auth.auth_context import CredentialSource
 from fabric_rti_mcp.config import logger
+
+ShotsEmbeddingMethod: TypeAlias = Literal["slm", "aoai"]
+ShotsSlmModel: TypeAlias = Literal["jina-v2-small", "e5-small-v2", "harrier-v1-270m"]
+
+DEFAULT_SHOTS_EMBEDDING_METHOD: ShotsEmbeddingMethod = "aoai"
+DEFAULT_SHOTS_SLM_MODEL: ShotsSlmModel = "harrier-v1-270m"
+SUPPORTED_SHOTS_EMBEDDING_METHODS: tuple[ShotsEmbeddingMethod, ...] = get_args(ShotsEmbeddingMethod)
+SUPPORTED_SHOTS_SLM_MODELS: tuple[ShotsSlmModel, ...] = get_args(ShotsSlmModel)
 
 
 @dataclass(slots=True, frozen=True)
@@ -75,9 +84,9 @@ class KustoConfig:
     # Default shots table name for the kusto_get_shots tool.
     shots_table: str | None = None
     # Default embedding method for kusto_get_shots.
-    shots_embedding_method: str = "aoai"
+    shots_embedding_method: str = DEFAULT_SHOTS_EMBEDDING_METHOD
     # Default SLM model for kusto_get_shots.
-    shots_slm_model: str = "harrier-v1-270m"
+    shots_slm_model: str = DEFAULT_SHOTS_SLM_MODEL
     # List of known Kusto services. If empty, no services are configured.
     known_services: list[KustoServiceConfig] | None = None
     # Whether to eagerly connect to the default service on startup.
@@ -111,8 +120,8 @@ class KustoConfig:
 
         open_ai_embedding_endpoint = os.getenv(KustoEnvVarNames.open_ai_embedding_endpoint, None)
         shots_table = os.getenv(KustoEnvVarNames.shots_table, None)
-        shots_embedding_method = os.getenv(KustoEnvVarNames.shots_embedding_method, "aoai")
-        shots_slm_model = os.getenv(KustoEnvVarNames.shots_slm_model, "harrier-v1-270m")
+        shots_embedding_method = os.getenv(KustoEnvVarNames.shots_embedding_method, DEFAULT_SHOTS_EMBEDDING_METHOD)
+        shots_slm_model = os.getenv(KustoEnvVarNames.shots_slm_model, DEFAULT_SHOTS_SLM_MODEL)
         known_services_string = os.getenv(KustoEnvVarNames.known_services, None)
         known_services: list[KustoServiceConfig] | None = None
         eager_connect = _env_bool(KustoEnvVarNames.eager_connect)

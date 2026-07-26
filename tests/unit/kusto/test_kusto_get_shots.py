@@ -2,6 +2,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from fabric_rti_mcp.services.kusto.kusto_config import (
+    DEFAULT_SHOTS_SLM_MODEL,
+    SUPPORTED_SHOTS_SLM_MODELS,
+    ShotsSlmModel,
+)
 from fabric_rti_mcp.services.kusto.kusto_service import kusto_get_shots
 
 CLUSTER_URI = "https://help.kusto.windows.net"
@@ -31,7 +36,7 @@ def test_get_shots_uses_aoai_by_default(mock_execute: MagicMock) -> None:
 def test_get_shots_uses_configured_slm_defaults(mock_execute: MagicMock, mock_config: MagicMock) -> None:
     mock_config.shots_table = None
     mock_config.shots_embedding_method = "slm"
-    mock_config.shots_slm_model = "harrier-v1-270m"
+    mock_config.shots_slm_model = DEFAULT_SHOTS_SLM_MODEL
 
     kusto_get_shots(
         "Find storms in Texas",
@@ -47,30 +52,31 @@ def test_get_shots_uses_configured_slm_defaults(mock_execute: MagicMock, mock_co
     assert mock_execute.call_args.kwargs["readonly_override"] is True
 
 
+@pytest.mark.parametrize("model_name", SUPPORTED_SHOTS_SLM_MODELS)
 @patch("fabric_rti_mcp.services.kusto.kusto_service._execute")
-def test_get_shots_uses_and_escapes_custom_slm_model(mock_execute: MagicMock) -> None:
+def test_get_shots_uses_supported_slm_model(mock_execute: MagicMock, model_name: ShotsSlmModel) -> None:
     kusto_get_shots(
         "Find the user's storms",
         CLUSTER_URI,
         shots_table_name=SHOTS_TABLE,
         embedding_method="slm",
-        slm_model_name="custom'model",
+        slm_model_name=model_name,
     )
 
     query = mock_execute.call_args.args[0]
     assert "Find the user''s storms" in query
-    assert "model_name='custom''model'" in query
+    assert f"model_name='{model_name}'" in query
 
 
 @patch("fabric_rti_mcp.services.kusto.kusto_service._execute")
-def test_get_shots_rejects_explicit_empty_slm_model(mock_execute: MagicMock) -> None:
-    with pytest.raises(ValueError, match="slm_model_name must not be empty"):
+def test_get_shots_rejects_unsupported_slm_model(mock_execute: MagicMock) -> None:
+    with pytest.raises(ValueError, match="slm_model_name must be one of"):
         kusto_get_shots(
             "Find storms in Texas",
             CLUSTER_URI,
             shots_table_name=SHOTS_TABLE,
             embedding_method="slm",
-            slm_model_name="",
+            slm_model_name="unsupported",  # type: ignore[arg-type]
         )
 
     mock_execute.assert_not_called()
@@ -149,7 +155,7 @@ def test_get_shots_slm_ignores_embedding_endpoint(mock_execute: MagicMock) -> No
 
 @patch("fabric_rti_mcp.services.kusto.kusto_service._execute")
 def test_get_shots_rejects_unknown_embedding_method(mock_execute: MagicMock) -> None:
-    with pytest.raises(ValueError, match="embedding_method must be either"):
+    with pytest.raises(ValueError, match="embedding_method must be one of"):
         kusto_get_shots(
             "Find storms in Texas",
             CLUSTER_URI,
