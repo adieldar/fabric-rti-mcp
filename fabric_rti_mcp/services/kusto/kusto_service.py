@@ -987,7 +987,7 @@ def kusto_get_shots(
     escaped_prompt = kql_escape_string(prompt)
     if normalized_embedding_method == "slm":
         resolved_model_name = slm_model_name if slm_model_name is not None else CONFIG.shots_slm_model
-        normalized_model_name = resolved_model_name.strip()
+        normalized_model_name = resolved_model_name.strip().lower()
         if normalized_model_name not in SUPPORTED_SHOTS_SLM_MODELS:
             supported_models = ", ".join(SUPPORTED_SHOTS_SLM_MODELS)
             raise ValueError(f"slm_model_name must be one of: {supported_models}.")
